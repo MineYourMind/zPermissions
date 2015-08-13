@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Allan Saddi <allan@saddi.com>
+ * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
+import net.kaikk.mc.uuidprovider.UUIDProvider;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -74,7 +76,7 @@ public class ExpirationRefreshHandler implements Runnable {
         membershipQueue.clear();
         Date now = new Date();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            for (Membership membership : storageStrategy.getDao().getGroups(player.getUniqueId())) {
+            for (Membership membership : storageStrategy.getPermissionService().getGroups(UUIDProvider.retrieveUUID(player.getName()))) {
                 if (membership.getExpiration() != null && membership.getExpiration().after(now)) {
                     membershipQueue.add(membership);
                 }
@@ -117,7 +119,7 @@ public class ExpirationRefreshHandler implements Runnable {
                 @Override
                 public void run() {
                     for (Membership membership : expired) {
-                        Player player = Bukkit.getPlayer(membership.getUuid());
+                        Player player = Bukkit.getPlayer(UUIDProvider.retrieveName(membership.getUuid()));
                         if (player != null && player.hasPermission("zpermissions.notify.self.expiration")) {
                             sendMessage(player, colorize("{YELLOW}Your membership to {DARK_GREEN}%s{YELLOW} has expired."), membership.getGroup().getDisplayName());
                         }

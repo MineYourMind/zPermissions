@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,24 +27,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.tyrannyofheaven.bukkit.util.ToHLoggingUtils;
 import org.tyrannyofheaven.bukkit.util.uuid.UuidUtils;
-import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionDao;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionService;
 import org.tyrannyofheaven.bukkit.zPermissions.model.EntityMetadata;
 import org.tyrannyofheaven.bukkit.zPermissions.model.Entry;
+import org.tyrannyofheaven.bukkit.zPermissions.util.GlobPattern;
 import org.tyrannyofheaven.bukkit.zPermissions.util.Utils;
 
 /**
  * Responsible for resolving a player's effective permissions.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class PermissionsResolver {
 
+    private static final Object NULL_ALIAS = new Object();
+
     private final ZPermissionsPlugin plugin;
 
-    private final PermissionDao dao;
+    private final PermissionService permissionService;
 
     private final Set<String> groupPermissionFormats = new HashSet<>();
 
@@ -58,18 +63,20 @@ public class PermissionsResolver {
 
     private boolean includeDefaultInAssigned = true;
 
-    private final Map<String, String> worldAliases = new HashMap<>();
+    private final Map<String, List<Pattern>> worldAliases = new LinkedHashMap<>(); // target -> [world1, world2, ...]
+
+    private final Map<String, Object> worldAliasCache = new HashMap<>(); // world -> target
 
     // For plugin use
     PermissionsResolver(ZPermissionsPlugin plugin) {
         this.plugin = plugin;
-        this.dao = null;
+        this.permissionService = null;
     }
 
     // For testing
-    public PermissionsResolver(PermissionDao dao) {
+    public PermissionsResolver(PermissionService permissionService) {
         this.plugin = null;
-        this.dao = dao;
+        this.permissionService = permissionService;
     }
 
     /**
@@ -105,9 +112,9 @@ public class PermissionsResolver {
         this.defaultGroup = defaultGroup;
     }
 
-    // Get DAO, accounting for decoupling from plugin
-    private PermissionDao getDao() {
-        return plugin == null ? dao : plugin.getDao();
+    // Get PermissionService, accounting for decoupling from plugin
+    private PermissionService getPermissionService() {
+        return plugin == null ? permissionService : plugin.getPermissionService();
     }
 
     // Get group permission format strings
@@ -162,11 +169,18 @@ public class PermissionsResolver {
     }
 
     public void addWorldAlias(String world, String target) {
-        worldAliases.put(world.toLowerCase(), target.toLowerCase());
+        target = target.toLowerCase();
+        List<Pattern> patterns = worldAliases.get(target);
+        if (patterns == null) {
+            patterns = new ArrayList<>();
+            worldAliases.put(target, patterns);
+        }
+        patterns.add(GlobPattern.compile(world.toLowerCase()));
     }
 
     public void clearWorldAliases() {
         worldAliases.clear();
+        worldAliasCache.clear();
     }
 
     // Output debug message
@@ -191,7 +205,7 @@ public class PermissionsResolver {
     public ResolverResult resolvePlayer(UUID uuid, String world, Set<String> regions) {
         String playerName = UuidUtils.canonicalizeUuid(uuid);
         // Get this player's groups
-        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getDao().getGroups(uuid)));
+        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getPermissionService().getGroups(uuid)));
         if (groups.isEmpty()) {
             // If no groups, use the default group
             groups.add(getDefaultGroup());
@@ -212,7 +226,7 @@ public class PermissionsResolver {
         Map<String, Boolean> permissions;
         if (isInterleavedPlayerPermissions()) {
             // Player-specific permissions overrides group permissions (at same level)
-            entries.addAll(getDao().getEntries(playerName, uuid, false));
+            entries.addAll(getPermissionService().getEntries(playerName, uuid, false));
 
             permissions = applyPermissions(entries, regions, world);
         }
@@ -220,7 +234,7 @@ public class PermissionsResolver {
             // Apply all player-specific permissions at the end
             permissions = applyPermissions(entries, regions, world);
             
-            permissions.putAll(applyPermissions(getDao().getEntries(playerName, uuid, false), regions, world));
+            permissions.putAll(applyPermissions(getPermissionService().getEntries(playerName, uuid, false), regions, world));
         }
 
         return new ResolverResult(permissions, new LinkedHashSet<>(resolveOrder));
@@ -249,7 +263,7 @@ public class PermissionsResolver {
 
     // Determine the order in which groups should be resolved
     private void calculateResolutionOrder(List<String> resolveOrder, String group) {
-        List<String> ancestry = getDao().getAncestry(group);
+        List<String> ancestry = getPermissionService().getAncestry(group);
         if (ancestry.isEmpty()) {
             // This only happens when the default group does not exist
             ancestry.add(getDefaultGroup());
@@ -295,15 +309,44 @@ public class PermissionsResolver {
                 entries.add(groupPerm);
             }
 
-            entries.addAll(getDao().getEntries(group, null, true));
+            entries.addAll(getPermissionService().getEntries(group, null, true));
         }
+    }
+
+    // Fetches target world, if aliased
+    private String getWorldAlias(String world) {
+        Object alias = worldAliasCache.get(world); // NB Should only contain Strings or NULL_ALIAS
+        if (alias == null) {
+            // This world has not yet been seen
+            // Go through aliases in order
+            outer:
+            for (Map.Entry<String, List<Pattern>> me : worldAliases.entrySet()) {
+                String target = me.getKey();
+                List<Pattern> patterns = me.getValue();
+                // Attempt to match patterns
+                for (Pattern p : patterns) {
+                    Matcher m = p.matcher(world);
+                    if (m.matches()) {
+                        alias = target;
+                        break outer;
+                    }
+                }
+            }
+            if (alias == null) {
+                // No alias found
+                alias = NULL_ALIAS;
+            }
+            // Set alias cache
+            worldAliasCache.put(world, alias);
+        }
+        return alias != NULL_ALIAS ? (String)alias : null;
     }
 
     // Apply an entity's permissions to the permission map. Universal permissions
     // (ones not assigned to any specific world) are applied first. They are
     // then overridden by any world-specific permissions.
     private Map<String, Boolean> applyPermissions(List<Entry> entries, Set<String> regions, String world) {
-        String worldAlias = world != null ? worldAliases.get(world) : null;
+        String worldAlias = world != null ? getWorldAlias(world) : null;
 
         Map<String, Boolean> permissions = new LinkedHashMap<>();
 
@@ -388,7 +431,7 @@ public class PermissionsResolver {
     public MetadataResult resolvePlayerMetadata(UUID uuid) {
         String playerName = UuidUtils.canonicalizeUuid(uuid);
         // Get this player's groups
-        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getDao().getGroups(uuid)));
+        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getPermissionService().getGroups(uuid)));
         if (groups.isEmpty()) {
             // If no groups, use the default group
             groups.add(getDefaultGroup());
@@ -402,12 +445,12 @@ public class PermissionsResolver {
         
         List<EntityMetadata> metadata = new ArrayList<>();
         for (String group : resolveOrder) {
-            metadata.addAll(getDao().getAllMetadata(group, null, true));
+            metadata.addAll(getPermissionService().getAllMetadata(group, null, true));
         }
         
         // NB There's only one level, so interleavedPlayerPermissions doesn't matter
         // Always resolve player last
-        metadata.addAll(getDao().getAllMetadata(playerName, uuid, false));
+        metadata.addAll(getPermissionService().getAllMetadata(playerName, uuid, false));
         
         return new MetadataResult(applyMetadata(metadata), new LinkedHashSet<>(resolveOrder));
     }
@@ -418,7 +461,7 @@ public class PermissionsResolver {
 
         List<EntityMetadata> metadata = new ArrayList<>();
         for (String group : resolveOrder) {
-            metadata.addAll(getDao().getAllMetadata(group, null, true));
+            metadata.addAll(getPermissionService().getAllMetadata(group, null, true));
         }
         
         return new MetadataResult(applyMetadata(metadata), new LinkedHashSet<>(resolveOrder));

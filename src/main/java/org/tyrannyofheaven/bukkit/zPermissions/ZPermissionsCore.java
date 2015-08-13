@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Allan Saddi <allan@saddi.com>
+ * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import org.bukkit.entity.Player;
  * Core operations (usually concerning the online permissions system aka Bukkit)
  * called by command handlers and event handlers.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public interface ZPermissionsCore {
 
@@ -68,6 +68,8 @@ public interface ZPermissionsCore {
     public void logExternalChange(String message, Object...args);
 
     public void updateDisplayName(UUID uuid, String displayName);
+
+    public void handleExplicitDefaultGroupMembership(final UUID uuid, final String displayName);
 
     // Metadata cache management
     

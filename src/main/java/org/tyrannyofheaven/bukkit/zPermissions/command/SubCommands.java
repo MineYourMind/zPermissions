@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
+import net.kaikk.mc.uuidprovider.UUIDProvider;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
@@ -56,6 +58,7 @@ import org.tyrannyofheaven.bukkit.util.transaction.TransactionCallback;
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionCallbackWithoutResult;
 import org.tyrannyofheaven.bukkit.util.uuid.CommandUuidResolver;
 import org.tyrannyofheaven.bukkit.util.uuid.CommandUuidResolverHandler;
+import org.tyrannyofheaven.bukkit.util.uuid.UuidResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.PermissionsResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsConfig;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsCore;
@@ -70,7 +73,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.util.Utils;
 /**
  * Handler for sub-commands of /permissions
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class SubCommands {
 
@@ -89,7 +92,7 @@ public class SubCommands {
     // Parent plugin
     private final Plugin plugin;
 
-    private final CommandUuidResolver uuidResolver;
+    private final CommandUuidResolver commandUuidResolver;
 
     // The "/permissions player" handler
     private final PlayerCommands playerCommand;
@@ -97,21 +100,25 @@ public class SubCommands {
     // The "/permissions group" handler
     private final GroupCommands groupCommand;
 
+    // The "/permissions uuid-cache" handler
+    private final UuidCacheCommands uuidCacheCommands;
+
     private PurgeCode purgeCode;
 
     private final Random random = new Random();
 
-    SubCommands(ZPermissionsCore core, StorageStrategy storageStrategy, PermissionsResolver resolver, ModelDumper modelDumper, ZPermissionsConfig config, Plugin plugin, CommandUuidResolver uuidResolver) {
+    SubCommands(ZPermissionsCore core, StorageStrategy storageStrategy, PermissionsResolver resolver, ModelDumper modelDumper, ZPermissionsConfig config, Plugin plugin, CommandUuidResolver commandUuidResolver, UuidResolver uuidResolver) {
         this.core = core;
         this.storageStrategy = storageStrategy;
         this.resolver = resolver;
         this.modelDumper = modelDumper;
         this.config = config;
         this.plugin = plugin;
-        this.uuidResolver = uuidResolver;
+        this.commandUuidResolver = commandUuidResolver;
 
-        playerCommand = new PlayerCommands(core, storageStrategy, resolver, config, plugin, uuidResolver);
-        groupCommand = new GroupCommands(core, storageStrategy, resolver, config, plugin, uuidResolver);
+        playerCommand = new PlayerCommands(core, storageStrategy, resolver, config, plugin, commandUuidResolver);
+        groupCommand = new GroupCommands(core, storageStrategy, resolver, config, plugin, commandUuidResolver);
+        uuidCacheCommands = new UuidCacheCommands(uuidResolver);
     }
 
     @Command(value={"player", "pl", "p"}, description="Player-related commands")
@@ -198,7 +205,7 @@ public class SubCommands {
             throw new ParseException("<what> should be 'groups' or 'players'");
         }
 
-        List<PermissionEntity> entities = storageStrategy.getDao().getEntities(group);
+        List<PermissionEntity> entities = storageStrategy.getPermissionService().getEntities(group);
         Collections.sort(entities, new Comparator<PermissionEntity>() {
             @Override
             public int compare(PermissionEntity a, PermissionEntity b) {
@@ -334,8 +341,8 @@ public class SubCommands {
                 @Override
                 public Boolean doInTransaction() throws Exception {
                     // Check in a single transaction
-                    List<PermissionEntity> players = storageStrategy.getDao().getEntities(false);
-                    List<PermissionEntity> groups = storageStrategy.getDao().getEntities(true);
+                    List<PermissionEntity> players = storageStrategy.getPermissionService().getEntities(false);
+                    List<PermissionEntity> groups = storageStrategy.getPermissionService().getEntities(true);
                     if (!players.isEmpty() || !groups.isEmpty()) {
                         sendMessage(sender, colorize("{RED}Database is not empty!"));
                         return false;
@@ -388,7 +395,7 @@ public class SubCommands {
             return;
         }
         
-        List<Membership> memberships = storageStrategy.getDao().getGroups(((Player)sender).getUniqueId());
+        List<Membership> memberships = storageStrategy.getPermissionService().getGroups(UUIDProvider.retrieveUUID(sender.getName()));
         if (!verbose)
             memberships = Utils.filterExpired(memberships);
         Collections.reverse(memberships); // Order from highest to lowest
@@ -431,7 +438,7 @@ public class SubCommands {
         Object result = storageStrategy.getRetryingTransactionStrategy().execute(new TransactionCallback<Object>() {
             @Override
             public Object doInTransaction() throws Exception {
-                return storageStrategy.getDao().getMetadata(sender.getName(), sender.getUniqueId(), false, metadataName);
+                return storageStrategy.getPermissionService().getMetadata(sender.getName(), UUIDProvider.retrieveUUID(sender.getName()), false, metadataName);
             }
         }, true);
 
@@ -455,12 +462,12 @@ public class SubCommands {
         storageStrategy.getRetryingTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
             @Override
             public void doInTransactionWithoutResult() throws Exception {
-                storageStrategy.getDao().setMetadata(player.getName(), player.getUniqueId(), false, metadataName, stringValue.toString());
+                storageStrategy.getPermissionService().setMetadata(player.getName(), UUIDProvider.retrieveUUID(player.getName()), false, metadataName, stringValue.toString());
             }
         });
 
         sendMessage(player, colorize("{YELLOW}Your {GOLD}%s{YELLOW} has been set to {GREEN}%s{YELLOW}"), metadataName, stringValue);
-        core.invalidateMetadataCache(player.getName(), player.getUniqueId(), false);
+        core.invalidateMetadataCache(player.getName(), UUIDProvider.retrieveUUID(player.getName()), false);
     }
 
     // Possible dupe with stuff in MetadataCommands. Refactor someday?
@@ -468,13 +475,13 @@ public class SubCommands {
         Boolean result = storageStrategy.getRetryingTransactionStrategy().execute(new TransactionCallback<Boolean>() {
             @Override
             public Boolean doInTransaction() throws Exception {
-                return storageStrategy.getDao().unsetMetadata(player.getName(), player.getUniqueId(), false, metadataName);
+                return storageStrategy.getPermissionService().unsetMetadata(player.getName(), UUIDProvider.retrieveUUID(player.getName()), false, metadataName);
             }
         });
         
         if (result) {
             sendMessage(player, colorize("{YELLOW}Your {GOLD}%s{YELLOW} has been unset"), metadataName);
-            core.invalidateMetadataCache(player.getName(), player.getUniqueId(), false);
+            core.invalidateMetadataCache(player.getName(), UUIDProvider.retrieveUUID(player.getName()), false);
         }
         else {
             sendMessage(player, colorize("{YELLOW}You do not have a {GOLD}%s"), metadataName);
@@ -487,11 +494,11 @@ public class SubCommands {
             final @Option(value={"-w", "--world"}, valueName="world") String world, final @Option(value={"-W", "--other-world"}, valueName="other-world") String otherWorld,
             final @Option(value={"-f", "--filter"}, valueName="filter") String filter, final @Option(value="player", completer="player") String player, final @Option(value="other-player", completer="player", optional=true) String otherPlayer) {
         final SubCommands realThis = this;
-        uuidResolver.resolveUsername(sender, player, false, new CommandUuidResolverHandler() {
+        commandUuidResolver.resolveUsername(sender, player, false, new CommandUuidResolverHandler() {
             @Override
             public void process(CommandSender sender, final String name, final UUID uuid, boolean group) {
                 // Resolve other name (if present)
-                uuidResolver.resolveUsername(sender, otherPlayer, false, new CommandUuidResolverHandler() {
+                commandUuidResolver.resolveUsername(sender, otherPlayer, false, new CommandUuidResolverHandler() {
                     @Override
                     public void process(CommandSender sender, String otherPlayer, UUID otherUuid, boolean group) {
                         realThis.diff(sender, regions, otherRegions, world, otherWorld, filter, name, uuid, otherPlayer, otherUuid);
@@ -507,11 +514,11 @@ public class SubCommands {
         List<String> header = new ArrayList<>();
 
         // Parse qualifiers for first player
-        Player p = Bukkit.getPlayer(uuid);
+        Player p = Bukkit.getPlayer(UUIDProvider.retrieveName(uuid));
         final String worldName;
         final Set<String> regionNames;
         if (otherPlayer != null) {
-            Utils.validatePlayer(storageStrategy.getDao(), resolver.getDefaultGroup(), uuid, player, header);
+            Utils.validatePlayer(storageStrategy.getPermissionService(), resolver.getDefaultGroup(), uuid, player, header);
             worldName = determineWorldName(sender, world, player, header);
             if (worldName == null) return;
             regionNames = parseRegions(regions);
@@ -534,7 +541,7 @@ public class SubCommands {
         final String otherWorldName;
         final Set<String> otherRegionNames;
         if (otherPlayer != null) {
-            Utils.validatePlayer(storageStrategy.getDao(), resolver.getDefaultGroup(), otherUuid, otherPlayer, header);
+            Utils.validatePlayer(storageStrategy.getPermissionService(), resolver.getDefaultGroup(), otherUuid, otherPlayer, header);
             otherWorldName = determineWorldName(sender, otherWorld, otherPlayer, header);
             if (otherWorldName == null) return;
             otherRegionNames = parseRegions(otherRegions);
@@ -656,12 +663,12 @@ public class SubCommands {
                     @Override
                     public void doInTransactionWithoutResult() throws Exception {
                         // Purge players
-                        for (PermissionEntity player : storageStrategy.getDao().getEntities(false)) {
-                            storageStrategy.getDao().deleteEntity(player.getDisplayName(), player.getUuid(), false);
+                        for (PermissionEntity player : storageStrategy.getPermissionService().getEntities(false)) {
+                            storageStrategy.getPermissionService().deleteEntity(player.getDisplayName(), player.getUuid(), false);
                         }
                         // Purge groups
-                        for (PermissionEntity group : storageStrategy.getDao().getEntities(true)) {
-                            storageStrategy.getDao().deleteEntity(group.getDisplayName(), null, true);
+                        for (PermissionEntity group : storageStrategy.getPermissionService().getEntities(true)) {
+                            storageStrategy.getPermissionService().deleteEntity(group.getDisplayName(), null, true);
                         }
                     }
                 });
@@ -695,7 +702,7 @@ public class SubCommands {
                 List<Membership> toDelete = new ArrayList<>();
                 Date now = new Date();
                 // For each group...
-                for (PermissionEntity group : storageStrategy.getDao().getEntities(true)) {
+                for (PermissionEntity group : storageStrategy.getPermissionService().getEntities(true)) {
                     // Check each membership
                     for (Membership membership : group.getMemberships()) {
                         if (membership.getExpiration() != null && !membership.getExpiration().after(now)) {
@@ -705,9 +712,9 @@ public class SubCommands {
                     }
                 }
                 
-                // This is going to be slow and inefficient since the DAO scans each member
+                // This is going to be slow and inefficient since PermissionService scans each member
                 for (Membership membership : toDelete) {
-                    storageStrategy.getDao().removeMember(membership.getGroup().getDisplayName(), membership.getUuid());
+                    storageStrategy.getPermissionService().removeMember(membership.getGroup().getDisplayName(), membership.getUuid());
                 }
             }
         });
@@ -771,7 +778,7 @@ public class SubCommands {
         List<UUID> players = Collections.emptyList();
         if (searchPlayers) {
             players = new ArrayList<>();
-            List<PermissionEntity> playerEntities = storageStrategy.getDao().getEntities(false);
+            List<PermissionEntity> playerEntities = storageStrategy.getPermissionService().getEntities(false);
             for (PermissionEntity entity : playerEntities) {
                 players.add(entity.getUuid());
             }
@@ -779,7 +786,7 @@ public class SubCommands {
         
         List<String> groups = Collections.emptyList();
         if (searchGroups) {
-            groups = storageStrategy.getDao().getEntityNames(true);
+            groups = storageStrategy.getPermissionService().getEntityNames(true);
         }
         
         // Create and configure search task
@@ -791,6 +798,23 @@ public class SubCommands {
 
         // Kick off search
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, searchTask);
+    }
+
+    @Command(value="uuid-cache", description="UUID cache control")
+    @Require("zpermissions.uuid-cache")
+    public UuidCacheCommands uuidCache(HelpBuilder helpBuilder, CommandSender sender, String[] args) {
+        if (args.length == 0) {
+            // Display sub-command help
+            helpBuilder.withCommandSender(sender)
+                .withHandler(uuidCacheCommands)
+                .forCommand("invalidate")
+                .forCommand("invalidate-all")
+                .show();
+            abortBatchProcessing();
+            return null;
+        }
+
+        return uuidCacheCommands;
     }
 
     private static class PurgeCode {

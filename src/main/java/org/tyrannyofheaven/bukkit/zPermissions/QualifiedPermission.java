@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import static org.tyrannyofheaven.bukkit.util.ToHStringUtils.hasText;
  * Permissions with no world specifier assume the world is null (i.e. global
  * permission). Permissions specific to a world should be "&lt;world>:&lt;permission>"
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class QualifiedPermission {
 

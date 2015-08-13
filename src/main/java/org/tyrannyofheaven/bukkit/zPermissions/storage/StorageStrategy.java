@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Allan Saddi <allan@saddi.com>
+ * Copyright 2012 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,26 @@
  */
 package org.tyrannyofheaven.bukkit.zPermissions.storage;
 
+import java.util.Map;
+
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionStrategy;
-import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionDao;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionService;
 
 /**
  * Encompasses initialization/shutdown and all other aspects of permissions
  * data persistence.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public interface StorageStrategy {
 
     /**
      * Perform any required initialization. Called once from the zPermissions
      * onEnable() handler.
+     * 
+     * @param configMap Configuration map containing key-value pairs
      */
-    public void init();
+    public void init(Map<String, Object> configMap);
     
     /**
      * Perform any required cleanup. Called from the zPermissions onDisable()
@@ -51,12 +55,12 @@ public interface StorageStrategy {
     public void refresh(boolean force, Runnable finishTask);
 
     /**
-     * Retrieve an instance of {@link PermissionDao} that is associated with
+     * Retrieve an instance of {@link PermissionService} that is associated with
      * this storage strategy.
      * 
-     * @return the PermissionDao instance
+     * @return the PermissionService instance
      */
-    public PermissionDao getDao();
+    public PermissionService getPermissionService();
     
     /**
      * Retrieve an instance of {@link TransactionStrategy} that is associated
@@ -72,7 +76,7 @@ public interface StorageStrategy {
      * Retrieve an instance of {@link TransactionStrategy} that is associated
      * with this storage strategy. This version should support retries if it
      * makes sense (e.g. SQL transactions with rollback). Typical used with
-     * simple operations (single DAO method call).
+     * simple operations (single PermissionService method call).
      * 
      * @return a TransactionStrategy
      */

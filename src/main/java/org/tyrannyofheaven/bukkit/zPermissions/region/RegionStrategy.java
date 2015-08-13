@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Allan Saddi <allan@saddi.com>
+ * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
  * Generic strategy for region support. Only requirement from region plugins is
  * being able to return a set of region names that contain a given location.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public interface RegionStrategy {
 

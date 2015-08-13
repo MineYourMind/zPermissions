@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, 2012 Allan Saddi <allan@saddi.com>
+ * Copyright 2011, 2012 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsCore;
  * Additional player events to listen on if (WorldGuard) region support is
  * enabled.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class ZPermissionsRegionPlayerListener implements Listener {
 

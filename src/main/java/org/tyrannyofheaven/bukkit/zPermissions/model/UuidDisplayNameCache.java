@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
+ * Copyright 2014 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,26 +15,31 @@
  */
 package org.tyrannyofheaven.bukkit.zPermissions.model;
 
+import static org.tyrannyofheaven.bukkit.util.uuid.UuidUtils.uncanonicalizeUuid;
+
 import java.util.Date;
+import java.util.UUID;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+import javax.persistence.Transient;
 
-/**
- * Entity class to keep track of the current <em>data</em> version.
- * 
- * @author zerothangel
- */
+import org.tyrannyofheaven.bukkit.util.uuid.UuidUtils;
+
 @Entity
-public class DataVersion {
+@Table(name="uuidcache")
+public class UuidDisplayNameCache {
 
     private String name;
+    
+    private String displayName;
 
-    private long version;
-
+    private String uuidString;
+    
     private Date timestamp;
 
     @Id
@@ -47,12 +52,21 @@ public class DataVersion {
     }
 
     @Column(nullable=false)
-    public long getVersion() {
-        return version;
+    public String getDisplayName() {
+        return displayName;
     }
 
-    public void setVersion(long version) {
-        this.version = version;
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    @Column(name="uuid", nullable=false)
+    public String getUuidString() {
+        return uuidString;
+    }
+
+    public void setUuidString(String uuid) {
+        this.uuidString = uuid;
     }
 
     @Column(nullable=false)
@@ -65,22 +79,13 @@ public class DataVersion {
         this.timestamp = timestamp;
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) return true;
-        if (!(obj instanceof DataVersion)) return false;
-        DataVersion o = (DataVersion)obj;
-        return getName().equals(o.getName());
+    @Transient
+    public UUID getUuid() {
+        return uncanonicalizeUuid(getUuidString());
     }
 
-    @Override
-    public int hashCode() {
-        return getName().hashCode();
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s #%d (%s)", getName(), getVersion(), getTimestamp());
+    public void setUuid(UUID uuid) {
+        setUuidString(UuidUtils.canonicalizeUuid(uuid));
     }
 
 }

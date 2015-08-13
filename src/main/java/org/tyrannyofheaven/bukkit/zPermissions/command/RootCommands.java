@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import org.tyrannyofheaven.bukkit.util.command.Require;
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionCallback;
 import org.tyrannyofheaven.bukkit.util.uuid.CommandUuidResolver;
 import org.tyrannyofheaven.bukkit.util.uuid.CommandUuidResolverHandler;
+import org.tyrannyofheaven.bukkit.util.uuid.UuidResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.PermissionsResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.RefreshCause;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsConfig;
@@ -62,7 +63,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.util.Utils;
  *   <li>/unsetrank</li>
  * </ul>
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class RootCommands {
 
@@ -77,7 +78,7 @@ public class RootCommands {
     // Parent plugin
     private final Plugin plugin;
 
-    private final CommandUuidResolver uuidResolver;
+    private final CommandUuidResolver commandUuidResolver;
 
     // Handler for /permissions sub-commands
     private final SubCommands sc;
@@ -97,15 +98,15 @@ public class RootCommands {
 
     }
 
-    public RootCommands(ZPermissionsCore core, StorageStrategy storageStrategy, PermissionsResolver resolver, ModelDumper modelDumper, ZPermissionsConfig config, Plugin plugin, CommandUuidResolver uuidResolver) {
+    public RootCommands(ZPermissionsCore core, StorageStrategy storageStrategy, PermissionsResolver resolver, ModelDumper modelDumper, ZPermissionsConfig config, Plugin plugin, CommandUuidResolver commandUuidResolver, UuidResolver uuidResolver) {
         this.core = core;
         this.storageStrategy = storageStrategy;
         this.resolver = resolver;
         this.config = config;
         this.plugin = plugin;
-        this.uuidResolver = uuidResolver;
+        this.commandUuidResolver = commandUuidResolver;
 
-        sc = new SubCommands(core, storageStrategy, resolver, modelDumper, config, plugin, uuidResolver);
+        sc = new SubCommands(core, storageStrategy, resolver, modelDumper, config, plugin, commandUuidResolver, uuidResolver);
     }
 
     @Command("permissions")
@@ -156,7 +157,7 @@ public class RootCommands {
     }
 
     private void rankChange(final CommandSender sender, final String playerName, final String trackName, final boolean rankUp, final BroadcastScope scope, final boolean verbose) {
-        uuidResolver.resolveUsername(sender, playerName, false, new CommandUuidResolverHandler() {
+        commandUuidResolver.resolveUsername(sender, playerName, false, new CommandUuidResolverHandler() {
             @Override
             public void process(CommandSender sender, String name, UUID uuid, boolean group) {
                 rankChange(sender, uuid, name, trackName, rankUp, scope, verbose);
@@ -177,7 +178,7 @@ public class RootCommands {
             @Override
             public Boolean doInTransaction() throws Exception {
                 Set<String> playerGroupNames = new HashSet<>();
-                playerGroupNames.addAll(Utils.toGroupNames(Utils.filterExpired(storageStrategy.getDao().getGroups(uuid))));
+                playerGroupNames.addAll(Utils.toGroupNames(Utils.filterExpired(storageStrategy.getPermissionService().getGroups(uuid))));
                 if (playerGroupNames.isEmpty())
                     playerGroupNames.add(resolver.getDefaultGroup());
         
@@ -196,7 +197,7 @@ public class RootCommands {
                     if (rankUp) {
                         String group = track.get(0);
                         try {
-                            storageStrategy.getDao().addMember(group, uuid, playerName, null);
+                            storageStrategy.getPermissionService().addMember(group, uuid, playerName, null);
                         }
                         catch (MissingGroupException e) {
                             sendMessage(sender, colorize("{RED}Group {DARK_GREEN}%s{RED} does not exist."), e.getGroupName());
@@ -224,7 +225,7 @@ public class RootCommands {
         
                     // If now ranked below first rank, remove altogether
                     if (rankIndex < 0) {
-                        storageStrategy.getDao().removeMember(oldGroup, uuid);
+                        storageStrategy.getPermissionService().removeMember(oldGroup, uuid);
                         announce(rankUp ? "promote" : "demote", scope, "%s removed %s from %s", sender.getName(), playerName, oldGroup);
                         if (scope.isShouldEcho() || verbose)
                             sendMessage(sender, colorize("{YELLOW}Removing {AQUA}%s{YELLOW} from {DARK_GREEN}%s"), playerName, oldGroup);
@@ -238,7 +239,7 @@ public class RootCommands {
         
                         // Change groups
                         try {
-                            storageStrategy.getDao().addMember(newGroup, uuid, playerName, null);
+                            storageStrategy.getPermissionService().addMember(newGroup, uuid, playerName, null);
                         }
                         catch (MissingGroupException e) {
                             sendMessage(sender, colorize("{RED}Group {DARK_GREEN}%s{RED} does not exist."), e.getGroupName());
@@ -246,7 +247,7 @@ public class RootCommands {
                             return false;
                         }
                         if (!oldGroup.equalsIgnoreCase(newGroup))
-                            storageStrategy.getDao().removeMember(oldGroup, uuid);
+                            storageStrategy.getPermissionService().removeMember(oldGroup, uuid);
         
                         announce(rankUp ? "promote" : "demote", scope, "%s %s %s from %s to %s", sender.getName(),
                                 (rankUp ? "promoted" : "demoted"),
@@ -296,7 +297,7 @@ public class RootCommands {
     }
 
     private void rankSet(final CommandSender sender, final String playerName, final String trackName, final String rankName, final BroadcastScope scope, final boolean verbose) {
-        uuidResolver.resolveUsername(sender, playerName, false, new CommandUuidResolverHandler() {
+        commandUuidResolver.resolveUsername(sender, playerName, false, new CommandUuidResolverHandler() {
             @Override
             public void process(CommandSender sender, String name, UUID uuid, boolean group) {
                 rankSet(sender, uuid, name, trackName, rankName, scope, verbose);
@@ -332,7 +333,7 @@ public class RootCommands {
             @Override
             public Boolean doInTransaction() throws Exception {
                 Set<String> playerGroupNames = new HashSet<>();
-                playerGroupNames.addAll(Utils.toGroupNames(Utils.filterExpired(storageStrategy.getDao().getGroups(uuid))));
+                playerGroupNames.addAll(Utils.toGroupNames(Utils.filterExpired(storageStrategy.getPermissionService().getGroups(uuid))));
                 if (playerGroupNames.isEmpty())
                     playerGroupNames.add(resolver.getDefaultGroup());
         
@@ -350,7 +351,7 @@ public class RootCommands {
                     if (rankName != null) {
                         // Not in any groups, just add to new group.
                         try {
-                            storageStrategy.getDao().addMember(rankName, uuid, playerName, null);
+                            storageStrategy.getPermissionService().addMember(rankName, uuid, playerName, null);
                         }
                         catch (MissingGroupException e) {
                             sendMessage(sender, colorize("{RED}Group {DARK_GREEN}%s{RED} does not exist."), e.getGroupName());
@@ -375,7 +376,7 @@ public class RootCommands {
                     if (rankName != null) {
                         // Add to new group
                         try {
-                            storageStrategy.getDao().addMember(rankName, uuid, playerName, null);
+                            storageStrategy.getPermissionService().addMember(rankName, uuid, playerName, null);
                         }
                         catch (MissingGroupException e) {
                             sendMessage(sender, colorize("{RED}Group {DARK_GREEN}%s{RED} does not exist."), e.getGroupName());
@@ -385,7 +386,7 @@ public class RootCommands {
 
                         // Remove from old group
                         if (!oldGroup.equalsIgnoreCase(rankName))
-                            storageStrategy.getDao().removeMember(oldGroup, uuid);
+                            storageStrategy.getPermissionService().removeMember(oldGroup, uuid);
 
                         announce("setrank", scope, "%s changed rank of %s from %s to %s", sender.getName(),
                                 playerName,
@@ -400,7 +401,7 @@ public class RootCommands {
                     }
                     else {
                         // Remove from old group
-                        storageStrategy.getDao().removeMember(oldGroup, uuid);
+                        storageStrategy.getPermissionService().removeMember(oldGroup, uuid);
 
                         announce("unsetrank", scope, "%s removed %s from %s", sender.getName(), playerName, oldGroup);
                         if (scope.isShouldEcho() || verbose)

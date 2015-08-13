@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
+import net.kaikk.mc.uuidprovider.UUIDProvider;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -68,6 +70,7 @@ import org.tyrannyofheaven.bukkit.util.command.ToHCommandExecutor;
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionCallback;
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionCallbackWithoutResult;
 import org.tyrannyofheaven.bukkit.util.transaction.TransactionStrategy;
+import org.tyrannyofheaven.bukkit.util.uuid.CascadingUuidResolver;
 import org.tyrannyofheaven.bukkit.util.uuid.CommandUuidResolver;
 import org.tyrannyofheaven.bukkit.util.uuid.MojangUuidResolver;
 import org.tyrannyofheaven.bukkit.util.uuid.UuidResolver;
@@ -76,7 +79,8 @@ import org.tyrannyofheaven.bukkit.zPermissions.command.DirTypeCompleter;
 import org.tyrannyofheaven.bukkit.zPermissions.command.GroupTypeCompleter;
 import org.tyrannyofheaven.bukkit.zPermissions.command.RootCommands;
 import org.tyrannyofheaven.bukkit.zPermissions.command.TrackTypeCompleter;
-import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionDao;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.MissingGroupException;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionService;
 import org.tyrannyofheaven.bukkit.zPermissions.listener.ZPermissionsFallbackListener;
 import org.tyrannyofheaven.bukkit.zPermissions.listener.ZPermissionsPlayerListener;
 import org.tyrannyofheaven.bukkit.zPermissions.listener.ZPermissionsRegionPlayerListener;
@@ -88,20 +92,23 @@ import org.tyrannyofheaven.bukkit.zPermissions.model.Membership;
 import org.tyrannyofheaven.bukkit.zPermissions.model.PermissionEntity;
 import org.tyrannyofheaven.bukkit.zPermissions.model.PermissionRegion;
 import org.tyrannyofheaven.bukkit.zPermissions.model.PermissionWorld;
-import org.tyrannyofheaven.bukkit.zPermissions.region.FactionsRegionStrategy;
+import org.tyrannyofheaven.bukkit.zPermissions.model.UuidDisplayNameCache;
+//import org.tyrannyofheaven.bukkit.zPermissions.region.FactionsRegionStrategy;
+//import org.tyrannyofheaven.bukkit.zPermissions.region.FactoidRegionStrategy;
 import org.tyrannyofheaven.bukkit.zPermissions.region.RegionStrategy;
-import org.tyrannyofheaven.bukkit.zPermissions.region.ResidenceRegionStrategy;
+//import org.tyrannyofheaven.bukkit.zPermissions.region.ResidenceRegionStrategy;
 import org.tyrannyofheaven.bukkit.zPermissions.region.WorldGuardRegionStrategy;
 import org.tyrannyofheaven.bukkit.zPermissions.service.DefaultPlayerPrefixHandler;
 import org.tyrannyofheaven.bukkit.zPermissions.service.PlayerPrefixHandler;
 import org.tyrannyofheaven.bukkit.zPermissions.service.ZPermissionsServiceImpl;
 import org.tyrannyofheaven.bukkit.zPermissions.storage.AvajeStorageStrategy;
-import org.tyrannyofheaven.bukkit.zPermissions.storage.MemoryStorageStrategy;
+import org.tyrannyofheaven.bukkit.zPermissions.storage.FileStorageStrategy;
 import org.tyrannyofheaven.bukkit.zPermissions.storage.StorageStrategy;
 import org.tyrannyofheaven.bukkit.zPermissions.util.ExpirationRefreshHandler;
 import org.tyrannyofheaven.bukkit.zPermissions.util.ModelDumper;
 import org.tyrannyofheaven.bukkit.zPermissions.util.RefreshTask;
 import org.tyrannyofheaven.bukkit.zPermissions.uuid.AvajeBulkUuidConverter;
+import org.tyrannyofheaven.bukkit.zPermissions.uuid.UUIDProvResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.uuid.YamlBulkUuidConverter;
 import org.tyrannyofheaven.bukkit.zPermissions.vault.VaultChatBridge;
 import org.tyrannyofheaven.bukkit.zPermissions.vault.VaultPermissionBridge;
@@ -112,7 +119,7 @@ import com.avaje.ebeaninternal.api.SpiEbeanServer;
 /**
  * zPermissions main class.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, ZPermissionsConfig, CommandExceptionHandler {
 
@@ -223,6 +230,9 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
 
     // Whether ZPermissionService#getPlayerMetadata() should be aware of prefix/suffix
     private static final boolean DEFAULT_SERVICE_METADATA_PREFIX_HACK = false;
+
+    // Whether default group membership should be made explicit
+    private static final boolean DEFAULT_EXPLICIT_DEFAULT_GROUP_MEMBERSHIP = false;
 
     // Version info (may include build number)
     private VersionInfo versionInfo;
@@ -361,6 +371,14 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
     // Whether ZPermissionService#getPlayerMetadata() should be aware of prefix/suffix
     private boolean serviceMetadataPrefixHack;
 
+    private String storageStrategyClassName;
+
+    // Whether default group membership should be made explicit
+    private boolean explicitDefaultGroupMembership;
+    
+    //UUID Provider plugin - this is used to validate UUIDProvider to related classes
+    public UUIDProvider uuidprov = null;
+
     /**
      * Retrieve this plugin's retrying TransactionStrategy
      * FIXME We use a separate TransactionStrategy because not all transactions
@@ -375,12 +393,12 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
     }
 
     /**
-     * Retrieve this plugin's DAO.
+     * Retrieve this plugin's PermissionService.
      * 
-     * @return the DAO
+     * @return the PermissionService
      */
-    PermissionDao getDao() {
-        return storageStrategy.getDao();
+    PermissionService getPermissionService() {
+        return storageStrategy.getPermissionService();
     }
 
     // Retrieve the PermissionResolver instance
@@ -436,7 +454,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
 
         // Really shut off all async tasks
         getServer().getScheduler().cancelTasks(this);
-
+     
         // Ensure storage is shut down properly
         if (storageStrategy != null) {
             storageStrategy.shutdown();
@@ -484,9 +502,35 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             return;
         }
 
+        //Verify that UUIDProvider is running
+        try {
+        	Plugin uuidplugin = this.getServer().getPluginManager().getPlugin("UUIDProvider");
+        	if(uuidplugin instanceof UUIDProvider){
+        		this.uuidprov = (UUIDProvider)uuidplugin;
+        		getLogger().info("Found UUIDProvider plugin! Using UUIDProvider for Resolving/Converting services!");
+        	} else {
+        		getLogger().severe("******************************************************************");
+        		getLogger().severe("Could not locate/initialize the UUIDProvider Plugin!");
+        		getLogger().severe("This version of zPermissions REQUIRES UUIDProvider for UUID");
+        		getLogger().severe("services! Please install UUIDProvider!");
+        		getLogger().severe("");
+        		getLogger().severe("You can press Control-C to stop the server. Server will shut down");
+        		getLogger().severe("in 30 seconds!");
+        		getLogger().severe("******************************************************************");
+        		Thread.sleep(30000);
+        		Bukkit.getServer().shutdown();
+        	}
+        } catch (Exception e) {
+        	getLogger().severe("Caught exception establishing external UUID Provider services : ");
+        	getLogger().severe(e.getMessage());
+        	e.printStackTrace();
+        }
         // Instantiate UUID resolver service
-        uuidResolver = new MojangUuidResolver(uuidResolverCacheSize, uuidResolverCacheTtl, TimeUnit.MINUTES);
-
+        if(uuidprov != null){
+        	uuidResolver = new UUIDProvResolver(uuidprov, this);
+        } else {
+        	uuidResolver = new MojangUuidResolver(uuidResolverCacheSize, uuidResolverCacheTtl, TimeUnit.MINUTES);
+        }
         // Attempt to initialize storage, retrying indefinitely (with exponential backoff)
         int initializationRetryDelay = STARTING_INITIALIZATION_RETRY_DELAY;
 
@@ -521,9 +565,16 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
 
     private boolean initializeStorageStrategy() {
         try {
-            // Set up TransactionStrategy and DAO
+            // Set up TransactionStrategy and PermissionService
             storageStrategy = null;
-            if (databaseSupport) {
+            
+            if (hasText(storageStrategyClassName)) {
+                // Use a custom StorageStrategy implementation
+                log(this, "Using custom storage strategy: %s", storageStrategyClassName);
+                storageStrategy = (StorageStrategy)Class.forName(storageStrategyClassName).newInstance();
+            }
+            else if (databaseSupport) {
+                // Use the default Avaje-based StorageStrategy
                 ebeanServer = ToHDatabaseUtils.createEbeanServer(this, getClassLoader(), namingConvention, config);
    
                 SpiEbeanServer spiEbeanServer = (SpiEbeanServer)ebeanServer;
@@ -556,11 +607,21 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
                     new YamlBulkUuidConverter(this, uuidResolver, dataFile).migrate();
                 }
 
-                storageStrategy = new MemoryStorageStrategy(this, dataFile);
+                storageStrategy = new FileStorageStrategy(this, dataFile);
             }
             
             // Initialize storage strategy
-            storageStrategy.init();
+            Map<String, Object> configMap = config.getValues(true);
+            storageStrategy.init(configMap);
+
+            // Set up UuidResolver cascade if StorageStrategy implementation happens
+            // to also implement UuidResolver
+            if (storageStrategy instanceof UuidResolver) {
+            	//DB Strategy is no longer an instance of a UuidResolver.
+            	//Unneeded thanks to UUIDProvider's caching.
+                log(this, "Using storage strategy as first-level UUID resolver.");
+                uuidResolver = new CascadingUuidResolver((UuidResolver)storageStrategy, uuidResolver);
+            }
         }
         catch (Exception e) {
             error(this, "Failed to initialize (storage): ", e);
@@ -580,8 +641,8 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             CommandUuidResolver commandUuidResolver = new CommandUuidResolver(this, uuidResolver, commandUuidResolverExecutor, false /* TODO true after 1.3 */);
 
             // Install our commands
-            (new ToHCommandExecutor<ZPermissionsPlugin>(this, new RootCommands(getZPermissionsCore(), storageStrategy, getResolver(), getModelDumper(), getZPermissionsConfig(), this, commandUuidResolver)))
-                .registerTypeCompleter("group", new GroupTypeCompleter(getDao()))
+            (new ToHCommandExecutor<ZPermissionsPlugin>(this, new RootCommands(getZPermissionsCore(), storageStrategy, getResolver(), getModelDumper(), getZPermissionsConfig(), this, commandUuidResolver, uuidResolver)))
+                .registerTypeCompleter("group", new GroupTypeCompleter(getPermissionService()))
                 .registerTypeCompleter("track", new TrackTypeCompleter(getZPermissionsConfig()))
                 .registerTypeCompleter("dump-dir", new DirTypeCompleter(getZPermissionsConfig()))
                 .setQuoteAware(true)
@@ -606,7 +667,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
 
             // Set up service API
             PlayerPrefixHandler prefixHandler = new DefaultPlayerPrefixHandler(getZPermissionsConfig());
-            ZPermissionsService service = new ZPermissionsServiceImpl(this, getResolver(), getDao(), metadataManager, getRetryingTransactionStrategy(), getZPermissionsConfig(), prefixHandler);
+            ZPermissionsService service = new ZPermissionsServiceImpl(this, getResolver(), getPermissionService(), metadataManager, getRetryingTransactionStrategy(), getZPermissionsConfig(), prefixHandler);
             getServer().getServicesManager().register(ZPermissionsService.class, service, this, ServicePriority.Normal);
 
             if (nativeVaultBridges && Bukkit.getPluginManager().getPlugin("Vault") != null) {
@@ -620,7 +681,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             // Make sure everyone currently online has permissions
             // NB Do in foreground
             for (Player player : Bukkit.getOnlinePlayers()) {
-                refreshPlayer(player.getUniqueId(), RefreshCause.GROUP_CHANGE);
+                refreshPlayer(UUIDProvider.retrieveUUID(player.getName()), RefreshCause.GROUP_CHANGE);
             }
 
             // Start auto-refresh task, if one is configured
@@ -652,11 +713,14 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         strategies.put(regionStrategy.getName(), regionStrategy);
 
         // Additional region managers are registered here.
-        regionStrategy = new ResidenceRegionStrategy(this, getZPermissionsCore());
-        strategies.put(regionStrategy.getName(), regionStrategy);
+        //regionStrategy = new ResidenceRegionStrategy(this, getZPermissionsCore());
+        //strategies.put(regionStrategy.getName(), regionStrategy);
         
-        regionStrategy = new FactionsRegionStrategy(this, getZPermissionsCore());
-        strategies.put(regionStrategy.getName(), regionStrategy);
+        //regionStrategy = new FactionsRegionStrategy(this, getZPermissionsCore());
+        //strategies.put(regionStrategy.getName(), regionStrategy);
+
+        //regionStrategy = new FactoidRegionStrategy(this, getZPermissionsCore());
+        //strategies.put(regionStrategy.getName(), regionStrategy);
 
         // Run through list in preference order
         for (String rmName : regionManagers) {
@@ -696,6 +760,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         result.add(Membership.class);
         result.add(EntityMetadata.class);
         result.add(DataVersion.class);
+        result.add(UuidDisplayNameCache.class);
         return result;
     }
 
@@ -709,7 +774,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         player.removeMetadata(PLAYER_METADATA_KEY, this);
 
         // Remove dynamic permission and recalculate, if wanted
-        final String permName = DYNAMIC_PERMISSION_PREFIX + player.getUniqueId().toString();
+        final String permName = DYNAMIC_PERMISSION_PREFIX + UUIDProvider.retrieveUUID(player.getName()).toString();
         Bukkit.getPluginManager().removePermission(permName);
         if (recalculate) {
             for (Permissible p : Bukkit.getPluginManager().getPermissionSubscriptions(permName)) {
@@ -736,11 +801,11 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             // Kick the player, if configured to do so
             if (kickOnError && (kickOpsOnError || !player.isOp())) {
                 // Probably safer to do this synchronously
-                final UUID playerUuid = player.getUniqueId();
+                final UUID playerUuid = UUIDProvider.retrieveUUID(player.getName());
                 getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
                     @Override
                     public void run() {
-                        Player player = getServer().getPlayer(playerUuid);
+                        Player player = getServer().getPlayer(UUIDProvider.retrieveName(playerUuid));
                         if (player != null)
                             player.kickPlayer("Error determining your permissions");
                     }
@@ -755,7 +820,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         
         // Fire off event if requested and changed
         if (eventCause != null && changed) {
-            final UUID playerUuid = player.getUniqueId();
+            final UUID playerUuid = UUIDProvider.retrieveUUID(player.getName());
             // Translate RefreshEvent to ZPermissionsPlayerPermissionsChangeEvent.Cause
             // Kinda dumb, but I don't want internal code to depend on the event class.
             final ZPermissionsPlayerUpdateEvent.Cause cause;
@@ -776,7 +841,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             Bukkit.getScheduler().runTask(this, new Runnable() {
                 @Override
                 public void run() {
-                    Player player = Bukkit.getPlayer(playerUuid);
+                    Player player = Bukkit.getPlayer(UUIDProvider.retrieveName(playerUuid));
                     if (player != null) {
                         ZPermissionsPlayerUpdateEvent event = new ZPermissionsPlayerUpdateEvent(player, cause);
                         Bukkit.getPluginManager().callEvent(event);
@@ -799,7 +864,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         final Set<String> regions = getRegions(location, player);
 
         // Fetch existing state
-        final String permName = DYNAMIC_PERMISSION_PREFIX + player.getUniqueId().toString();
+        final String permName = DYNAMIC_PERMISSION_PREFIX + UUIDProvider.retrieveUUID(player.getName()).toString();
         Permission perm = Bukkit.getPluginManager().getPermission(permName);
 
         PlayerState playerState = getPlayerState(player);
@@ -828,7 +893,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             @Override
             public ResolverResult doInTransaction() throws Exception {
 //                fakeFailureChance();
-                return getResolver().resolvePlayer(player.getUniqueId(), world, regions);
+                return getResolver().resolvePlayer(UUIDProvider.retrieveUUID(player.getName()), world, regions);
             }
         }, true);
 
@@ -891,9 +956,10 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
      * @param uuid the UUID of the player
      * @param cause the cause of this refresh
      */
-    @Override
+
+	@Override
     public void refreshPlayer(UUID uuid, RefreshCause cause) {
-        Player player = Bukkit.getPlayer(uuid);
+        Player player = Bukkit.getPlayer(UUIDProvider.retrieveName(uuid));
         if (player != null) {
             debug(this, "Refreshing player %s", player.getName());
             setBukkitPermissions(player, player.getLocation(), true, cause);
@@ -908,7 +974,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         debug(this, "Refreshing all online players");
         Set<UUID> toRefresh = new HashSet<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            toRefresh.add(player.getUniqueId());
+            toRefresh.add(UUIDProvider.retrieveUUID(player.getName()));
         }
         refreshTask.start(toRefresh);
     }
@@ -936,9 +1002,10 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
      * 
      * @param uuid the UUID of the player
      */
-    @Override
+
+	@Override
     public void refreshExpirations(UUID uuid) {
-        if (Bukkit.getPlayer(uuid) != null)
+        if (Bukkit.getPlayer(UUIDProvider.retrieveName(uuid)) != null)
             refreshExpirations();
     }
 
@@ -954,7 +1021,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         for (Player player : Bukkit.getOnlinePlayers()) {
             PlayerState playerState = getPlayerState(player);
             if (playerState == null || playerState.getGroups().contains(groupName)) {
-                toRefresh.add(player.getUniqueId());
+                toRefresh.add(UUIDProvider.retrieveUUID(player.getName()));
             }
         }
         
@@ -1137,6 +1204,7 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
         value = config.getString("default-group");
         if (hasText(value))
             getResolver().setDefaultGroup(value);
+        explicitDefaultGroupMembership = config.getBoolean("explicit-default-group-membership", DEFAULT_EXPLICIT_DEFAULT_GROUP_MEMBERSHIP);
         
         value = config.getString("default-track");
         if (hasText(value))
@@ -1233,9 +1301,12 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             // Set up default region manager(s)
             regionManagers.add("WorldGuard");
             regionManagers.add("Residence");
+            regionManagers.add("Factoid");
         }
 
         configureWorldMirrors();
+        
+        storageStrategyClassName = config.getString("custom-storage-strategy");
     }
 
     private void configureWorldMirrors() {
@@ -1437,9 +1508,11 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
                 getRetryingTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
                     @Override
                     public void doInTransactionWithoutResult() throws Exception {
-                        getDao().updateDisplayName(uuid, displayName);
+                        getPermissionService().updateDisplayName(uuid, displayName);
                     }
                 });
+                // Also preload name -> UUID mapping into UuidResolver cache(s)
+                uuidResolver.preload(displayName, uuid);
             }
         });
     }
@@ -1447,6 +1520,33 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
     @Override
     public boolean isServiceMetadataPrefixHack() {
         return serviceMetadataPrefixHack;
+    }
+
+    @Override
+    public void handleExplicitDefaultGroupMembership(final UUID uuid, final String displayName) {
+        if (!explicitDefaultGroupMembership) return; // Keep things implicit
+        
+        final Plugin realThis = this;
+        getRetryingTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
+            @Override
+            public void doInTransactionWithoutResult() throws Exception {
+                // Check if they are in any groups
+                List<Membership> memberships = getPermissionService().getGroups(uuid);
+                if (memberships.isEmpty()) {
+                    // No groups, so add them
+                    try {
+                        debug(realThis, "Explicitly adding %s to default group %s", displayName, getResolver().getDefaultGroup());
+                        getPermissionService().addMember(getResolver().getDefaultGroup(), uuid, displayName, null);
+                    }
+                    catch (MissingGroupException e) {
+                        warn(realThis, "explicit-default-group-membership is true but the group (%s) does not exist; nothing done", getResolver().getDefaultGroup());
+                    }
+                    
+                    // No need to refresh or invalidate caches since they were
+                    // already a member of this group.
+                }
+            }
+        });
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Allan Saddi <allan@saddi.com>
+ * Copyright 2012 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.storage.StorageStrategy;
  * Creates a dump file containing commands that can re-create the persistent
  * state.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class ModelDumper {
 
@@ -65,14 +65,14 @@ public class ModelDumper {
                             plugin.getDescription().getVersion(),
                             new Date()));
                     // Dump players first
-                    List<PermissionEntity> players = Utils.sortPlayers(storageStrategy.getDao().getEntities(false));
+                    List<PermissionEntity> players = Utils.sortPlayers(storageStrategy.getPermissionService().getEntities(false));
                     for (PermissionEntity entity : players) {
                         out.println(String.format("# Player %s", entity.getDisplayName()));
                         dumpPermissions(out, entity);
                         dumpMetadata(out, entity);
                     }
                     // Dump groups
-                    List<PermissionEntity> groups = Utils.sortGroups(storageStrategy.getDao().getEntities(true));
+                    List<PermissionEntity> groups = Utils.sortGroups(storageStrategy.getPermissionService().getEntities(true));
                     for (PermissionEntity entity : groups) {
                         out.println(String.format("# Group %s", entity.getDisplayName()));
                         out.println(String.format("permissions group %s create", quoteArgForCommand(entity.getDisplayName())));
@@ -91,7 +91,7 @@ public class ModelDumper {
                                     delimitedString(" ", parentNames)));
                         }
                         // Dump memberships (NB getMembers() is already sorting them)
-                        for (Membership membership : storageStrategy.getDao().getMembers(entity.getName())) {
+                        for (Membership membership : storageStrategy.getPermissionService().getMembers(entity.getName())) {
                             if (membership.getExpiration() == null) {
                                 out.println(String.format("permissions group %s add %s",
                                         quoteArgForCommand(entity.getDisplayName()),

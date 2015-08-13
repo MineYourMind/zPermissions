@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
+import net.kaikk.mc.uuidprovider.UUIDProvider;
 import net.milkbowl.vault.permission.Permission;
 
 import org.bukkit.Bukkit;
@@ -26,7 +27,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsConfig;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsCore;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsService;
 import org.tyrannyofheaven.bukkit.zPermissions.dao.MissingGroupException;
-import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionDao;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionService;
 import org.tyrannyofheaven.bukkit.zPermissions.storage.StorageStrategy;
 
 import com.google.common.base.Joiner;
@@ -66,15 +67,15 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
     public String[] getPlayerGroups(String world, OfflinePlayer player) {
         Collection<String> result;
         if (config.isVaultGetGroupsUsesAssignedOnly())
-            result = service.getPlayerAssignedGroups(player.getUniqueId());
+            result = service.getPlayerAssignedGroups(UUIDProvider.retrieveUUID(player.getName()));
         else
-            result = service.getPlayerGroups(player.getUniqueId());
+            result = service.getPlayerGroups(UUIDProvider.retrieveUUID(player.getName()));
         return result.toArray(new String[result.size()]);
     }
 
     @Override
     public String getPrimaryGroup(String world, OfflinePlayer player) {
-        return service.getPlayerPrimaryGroup(player.getUniqueId());
+        return service.getPlayerPrimaryGroup(UUIDProvider.retrieveUUID(player.getName()));
     }
 
     @Override
@@ -91,7 +92,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             getTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
                 @Override
                 public void doInTransactionWithoutResult() throws Exception {
-                    getDao().setPermission(group, null, true, null, permWorld, permission, true);
+                    getPermissionService().setPermission(group, null, true, null, permWorld, permission, true);
                 }
             });
             core.refreshAffectedPlayers(group);
@@ -133,7 +134,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
         boolean result = getTransactionStrategy().execute(new TransactionCallback<Boolean>() {
             @Override
             public Boolean doInTransaction() throws Exception {
-                return getDao().unsetPermission(group, null, true, null, permWorld, permission);
+                return getPermissionService().unsetPermission(group, null, true, null, permWorld, permission);
             }
         });
         if (result) {
@@ -168,14 +169,14 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             return false;
         }
 
-        final UUID uuid = player.getUniqueId();
+        final UUID uuid = UUIDProvider.retrieveUUID(player.getName());
         final String playerName = player.getName();
 
         final String permWorld = world;
         getTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
             @Override
             public void doInTransactionWithoutResult() throws Exception {
-                getDao().setPermission(playerName, uuid, false, null, permWorld, permission, true);
+                getPermissionService().setPermission(playerName, uuid, false, null, permWorld, permission, true);
             }
         });
         core.refreshPlayer(uuid, RefreshCause.COMMAND);
@@ -191,7 +192,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             return false;
         }
 
-        final UUID uuid = player.getUniqueId();
+        final UUID uuid = UUIDProvider.retrieveUUID(player.getName());
         final String playerName = player.getName();
 
         // NB world ignored
@@ -199,7 +200,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             getTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
                 @Override
                 public void doInTransactionWithoutResult() throws Exception {
-                    getDao().addMember(group, uuid, playerName, null);
+                    getPermissionService().addMember(group, uuid, playerName, null);
                 }
             });
         }
@@ -216,7 +217,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
     @Override
     public boolean playerHas(String world, OfflinePlayer player, String permission) {
         if (!player.isOnline()) {
-            Map<String, Boolean> perms = service.getPlayerPermissions(world, null, player.getUniqueId());
+            Map<String, Boolean> perms = service.getPlayerPermissions(world, null, UUIDProvider.retrieveUUID(player.getName()));
             Boolean value = perms.get(permission.toLowerCase());
             if (value != null) {
                 return value;
@@ -238,9 +239,9 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
     public boolean playerInGroup(String world, OfflinePlayer player, String group) {
         Collection<String> groups;
         if (config.isVaultGroupTestUsesAssignedOnly())
-            groups = service.getPlayerAssignedGroups(player.getUniqueId());
+            groups = service.getPlayerAssignedGroups(UUIDProvider.retrieveUUID(player.getName()));
         else
-            groups = service.getPlayerGroups(player.getUniqueId());
+            groups = service.getPlayerGroups(UUIDProvider.retrieveUUID(player.getName()));
         // Groups are case-insensitive...
         for (String g : groups) {
             if (g.equalsIgnoreCase(group)) {
@@ -259,14 +260,14 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             return false;
         }
 
-        final UUID uuid = player.getUniqueId();
+        final UUID uuid = UUIDProvider.retrieveUUID(player.getName());
         final String playerName = player.getName();
 
         final String permWorld = world;
         boolean result = getTransactionStrategy().execute(new TransactionCallback<Boolean>() {
             @Override
             public Boolean doInTransaction() throws Exception {
-                return getDao().unsetPermission(playerName, uuid, false, null, permWorld, permission);
+                return getPermissionService().unsetPermission(playerName, uuid, false, null, permWorld, permission);
             }
         });
         if (result) {
@@ -284,7 +285,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             return false;
         }
 
-        final UUID uuid = player.getUniqueId();
+        final UUID uuid = UUIDProvider.retrieveUUID(player.getName());
         final String playerName = player.getName();
 
         // NB world ignored
@@ -292,7 +293,7 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
             getTransactionStrategy().execute(new TransactionCallback<Boolean>() {
                 @Override
                 public Boolean doInTransaction() throws Exception {
-                    return getDao().removeMember(group, uuid);
+                    return getPermissionService().removeMember(group, uuid);
                 }
             });
         }
@@ -310,8 +311,8 @@ public class VaultPermissionBridge extends PermissionCompatibility implements Li
         Bukkit.getServicesManager().register(Permission.class, this, plugin, ServicePriority.Highest);
     }
 
-    private PermissionDao getDao() {
-        return storageStrategy.getDao();
+    private PermissionService getPermissionService() {
+        return storageStrategy.getPermissionService();
     }
 
     private TransactionStrategy getTransactionStrategy() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Allan Saddi <allan@saddi.com>
+ * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 /**
  * RegionStrategy implementation for WorldGuard.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class WorldGuardRegionStrategy implements RegionStrategy, Listener {
 

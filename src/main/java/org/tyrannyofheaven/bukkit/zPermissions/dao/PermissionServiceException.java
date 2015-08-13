@@ -16,22 +16,27 @@
 package org.tyrannyofheaven.bukkit.zPermissions.dao;
 
 /**
- * Thrown when referencing a non-existent group.
+ * Thrown for any errors originating within PermissionService.
  * 
  * @author zerothangel
  */
-public class MissingGroupException extends PermissionServiceException {
+public class PermissionServiceException extends RuntimeException {
 
-    private static final long serialVersionUID = 1066889464517437579L;
+    private static final long serialVersionUID = 79973002335863673L;
 
-    private final String groupName;
-    
-    public MissingGroupException(String groupName) {
-        this.groupName = groupName;
+    public PermissionServiceException() {
     }
 
-    public String getGroupName() {
-        return groupName;
+    public PermissionServiceException(String message) {
+        super(message);
+    }
+
+    public PermissionServiceException(Throwable cause) {
+        super(cause);
+    }
+
+    public PermissionServiceException(String message, Throwable cause) {
+        super(message, cause);
     }
 
 }

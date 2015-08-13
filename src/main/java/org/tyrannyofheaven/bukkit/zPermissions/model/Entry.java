@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import javax.persistence.UniqueConstraint;
 /**
  * A permission entry.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 @Entity
 @Table(name="entries")

@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Allan Saddi <allan@saddi.com>
+ * Copyright 2011 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package org.tyrannyofheaven.bukkit.zPermissions.listener;
 
 import static org.tyrannyofheaven.bukkit.util.ToHLoggingUtils.debug;
+import net.kaikk.mc.uuidprovider.UUIDProvider;
 
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
@@ -35,7 +36,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsCore;
  * PlayerListener for zPermissions. Simply updates or removes the zPermissions
  * permissions as appropriate.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class ZPermissionsPlayerListener implements Listener {
 
@@ -55,7 +56,7 @@ public class ZPermissionsPlayerListener implements Listener {
     public void onAsyncPlayerPreLogin(AsyncPlayerPreLoginEvent event) {
         if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.ALLOWED) {
             // Update display name
-            core.updateDisplayName(event.getUniqueId(), event.getName());
+            core.updateDisplayName(UUIDProvider.retrieveUUID(event.getName()), event.getName());
         }
     }
 
@@ -93,6 +94,12 @@ public class ZPermissionsPlayerListener implements Listener {
     }
 
     @EventHandler(priority=EventPriority.MONITOR)
+    public void onPlayerJoinMonitor(PlayerJoinEvent event) {
+        // Make default group membership explicit, if configured to do so...
+        core.handleExplicitDefaultGroupMembership(UUIDProvider.retrieveUUID(event.getPlayer().getName()), event.getPlayer().getName());
+    }
+
+    @EventHandler(priority=EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         debug(plugin, "%s quitting", event.getPlayer().getName());
         core.removeBukkitPermissions(event.getPlayer(), false); // They're leaving, no need to recalc
@@ -104,7 +111,7 @@ public class ZPermissionsPlayerListener implements Listener {
             }
         });
         // Pre-load cache of UuidResolver
-        uuidResolver.preload(event.getPlayer().getName(), event.getPlayer().getUniqueId());
+        uuidResolver.preload(event.getPlayer().getName(), UUIDProvider.retrieveUUID(event.getPlayer().getName()));
     }
 
     @EventHandler(priority=EventPriority.LOWEST)

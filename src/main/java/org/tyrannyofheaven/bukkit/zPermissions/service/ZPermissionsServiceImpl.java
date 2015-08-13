@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Allan Saddi <allan@saddi.com>
+ * Copyright 2012 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import net.kaikk.mc.uuidprovider.UUIDProvider;
+
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.Plugin;
@@ -38,7 +40,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.MetadataManager;
 import org.tyrannyofheaven.bukkit.zPermissions.PermissionsResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsConfig;
 import org.tyrannyofheaven.bukkit.zPermissions.ZPermissionsService;
-import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionDao;
+import org.tyrannyofheaven.bukkit.zPermissions.dao.PermissionService;
 import org.tyrannyofheaven.bukkit.zPermissions.model.Membership;
 import org.tyrannyofheaven.bukkit.zPermissions.model.PermissionEntity;
 import org.tyrannyofheaven.bukkit.zPermissions.util.MetadataConstants;
@@ -47,7 +49,7 @@ import org.tyrannyofheaven.bukkit.zPermissions.util.Utils;
 /**
  * Simple implementation of {@link ZPermissionsService}.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class ZPermissionsServiceImpl implements ZPermissionsService {
 
@@ -57,7 +59,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
     private final PermissionsResolver resolver;
 
-    private final PermissionDao dao;
+    private final PermissionService permissionService;
 
     private final MetadataManager metadataManager;
 
@@ -81,13 +83,13 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
         validMetadataTypes = Collections.unmodifiableSet(types);
     }
 
-    public ZPermissionsServiceImpl(Plugin plugin, PermissionsResolver resolver, PermissionDao dao, MetadataManager metadataManager, TransactionStrategy transactionStrategy, ZPermissionsConfig config, PlayerPrefixHandler playerPrefixHandler) {
+    public ZPermissionsServiceImpl(Plugin plugin, PermissionsResolver resolver, PermissionService permissionService, MetadataManager metadataManager, TransactionStrategy transactionStrategy, ZPermissionsConfig config, PlayerPrefixHandler playerPrefixHandler) {
         if (plugin == null)
             throw new IllegalArgumentException("plugin cannot be null");
         if (resolver == null)
             throw new IllegalArgumentException("resolver cannot be null");
-        if (dao == null)
-            throw new IllegalArgumentException("dao cannot be null");
+        if (permissionService == null)
+            throw new IllegalArgumentException("permissionService cannot be null");
         if (metadataManager == null)
             throw new IllegalArgumentException("metadataManager cannot be null");
         if (transactionStrategy == null)
@@ -98,7 +100,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
             throw new IllegalArgumentException("playerPrefixHandler cannot be null");
         this.plugin = plugin;
         this.resolver = resolver;
-        this.dao = dao;
+        this.permissionService = permissionService;
         this.metadataManager = metadataManager;
         this.transactionStrategy = transactionStrategy;
         this.config = config;
@@ -109,8 +111,8 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
         return resolver;
     }
     
-    private PermissionDao getDao() {
-        return dao;
+    private PermissionService getPermissionService() {
+        return permissionService;
     }
 
     private MetadataManager getMetadataManager() {
@@ -132,7 +134,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
     public Set<String> getAllGroups() {
         Set<String> groups = new HashSet<>();
         
-        for (String groupName : getDao().getEntityNames(true)) {
+        for (String groupName : getPermissionService().getEntityNames(true)) {
             groups.add(groupName);
         }
 
@@ -150,8 +152,8 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
         OfflinePlayer player = Bukkit.getOfflinePlayer(playerName);
         if (player == null) return Collections.emptyList();
-        UUID uuid = player.getUniqueId();
-
+        UUID uuid = UUIDProvider.retrieveUUID(player.getName());
+        
         return getPlayerAssignedGroups(uuid);
     }
 
@@ -160,7 +162,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
         if (uuid == null)
             throw new IllegalArgumentException("uuid cannot be null");
 
-        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getDao().getGroups(uuid)));
+        List<String> groups = Utils.toGroupNames(Utils.filterExpired(getPermissionService().getGroups(uuid)));
         // NB: Only works because we know returned list is mutable.
 
         // If totally empty, then they are in the default group.
@@ -184,7 +186,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
         OfflinePlayer player = Bukkit.getOfflinePlayer(playerName);
         if (player == null) return Collections.emptySet();
-        UUID uuid = player.getUniqueId();
+        UUID uuid = UUIDProvider.retrieveUUID(player.getName());
 
         return getPlayerGroups(uuid);
     }
@@ -199,9 +201,9 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
         getTransactionStrategy().execute(new TransactionCallbackWithoutResult() {
             @Override
             public void doInTransactionWithoutResult() throws Exception {
-                for (String group : Utils.toGroupNames(Utils.filterExpired(getDao().getGroups(uuid)))) {
+                for (String group : Utils.toGroupNames(Utils.filterExpired(getPermissionService().getGroups(uuid)))) {
                     // Get ancestors
-                    List<String> ancestors = getDao().getAncestry(group);
+                    List<String> ancestors = getPermissionService().getAncestry(group);
                     if (ancestors.isEmpty()) {
                         // Non-existant default group
                         ancestors.add(getResolver().getDefaultGroup());
@@ -258,7 +260,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
         OfflinePlayer player = Bukkit.getOfflinePlayer(playerName);
         if (player == null) return Collections.emptyMap();
-        UUID uuid = player.getUniqueId();
+        UUID uuid = UUIDProvider.retrieveUUID(player.getName());
         
         return getPlayerPermissions(worldName, regionNames, uuid);
     }
@@ -296,7 +298,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
     public Set<String> getAllPlayers() {
         Set<String> players = new HashSet<>();
         
-        for (String playerName : getDao().getEntityNames(false)) {
+        for (String playerName : getPermissionService().getEntityNames(false)) {
             players.add(playerName);
         }
 
@@ -307,7 +309,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
     public Set<UUID> getAllPlayersUUID() {
         Set<UUID> players = new HashSet<>();
         
-        for (PermissionEntity player : getDao().getEntities(false)) {
+        for (PermissionEntity player : getPermissionService().getEntities(false)) {
             players.add(player.getUuid());
         }
 
@@ -322,21 +324,21 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
     public Set<String> getGroupMembers(String groupName) {
         if (!hasText(groupName))
             throw new IllegalArgumentException("groupName must have a value");
-        // DAO returns them in alphabetical order. This interface doesn't care
+        // PermissionService returns them in alphabetical order. This interface doesn't care
         // about ordering.
-        return new HashSet<>(Utils.toMembers(Utils.filterExpired(getDao().getMembers(groupName)), false));
+        return new HashSet<>(Utils.toMembers(Utils.filterExpired(getPermissionService().getMembers(groupName)), false));
     }
 
     @Override
     public Set<UUID> getGroupMembersUUID(String groupName) {
         if (!hasText(groupName))
             throw new IllegalArgumentException("groupName must have a value");
-        // DAO returns them in alphabetical order. This interface doesn't care
+        // PermissionService returns them in alphabetical order. This interface doesn't care
         // about ordering.
         
         Set<UUID> members = new HashSet<>();
 
-        for (Membership membership : Utils.filterExpired(getDao().getMembers(groupName))) {
+        for (Membership membership : Utils.filterExpired(getPermissionService().getMembers(groupName))) {
             members.add(membership.getUuid());
         }
 
@@ -354,7 +356,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
         OfflinePlayer player = Bukkit.getOfflinePlayer(playerName);
         if (player == null) return null;
-        UUID uuid = player.getUniqueId();
+        UUID uuid = UUIDProvider.retrieveUUID(player.getName());
 
         return getPlayerMetadata(uuid, metadataName, type);
     }
@@ -416,7 +418,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
             value = getTransactionStrategy().execute(new TransactionCallback<Object>() {
                 @Override
                 public Object doInTransaction() throws Exception {
-                    return getDao().getMetadata(name, uuid, group, metadataName);
+                    return getPermissionService().getMetadata(name, uuid, group, metadataName);
                 }
             }, true);
         }
@@ -470,7 +472,7 @@ public class ZPermissionsServiceImpl implements ZPermissionsService {
 
         OfflinePlayer player = Bukkit.getOfflinePlayer(playerName);
         if (player == null) return null;
-        UUID uuid = player.getUniqueId();
+        UUID uuid = UUIDProvider.retrieveUUID(player.getName());
 
         return getPlayerPrimaryGroup(uuid);
     }

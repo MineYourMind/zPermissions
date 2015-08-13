@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Allan Saddi <allan@saddi.com>
+ * Copyright 2013 ZerothAngel <zerothangel@tyrannyofheaven.org>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package org.tyrannyofheaven.bukkit.zPermissions.util;
  * Simple holder for the names of common metadata properties. These properties
  * have no intrinsic significance but do affect Vault.
  * 
- * @author asaddi
+ * @author zerothangel
  */
 public class MetadataConstants {
 
