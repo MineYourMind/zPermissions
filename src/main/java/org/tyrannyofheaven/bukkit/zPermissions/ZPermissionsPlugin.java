@@ -476,6 +476,27 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
      */
     @Override
     public void onEnable() {
+        //Verify that UUIDProvider is running
+        try {
+        	Plugin uuidplugin = this.getServer().getPluginManager().getPlugin("UUIDProvider");
+        	if(uuidplugin instanceof UUIDProvider){
+        		this.uuidprov = (UUIDProvider)uuidplugin;
+        		getLogger().info("Found UUIDProvider plugin! Using UUIDProvider for Resolving/Converting services!");
+        	} else {
+        		//We shouldn't ever get here, as UUIDProvider is listed as a depend.... but just in case.
+        		getLogger().severe("**********************************************************************************");
+        		getLogger().severe("Could not find UUIDProvider - This is a REQUIRED Dependency!");
+        		getLogger().severe("This version of zPermissions will not run without it!");
+        		getLogger().severe("zPermissions is DISABLED.");
+        		getLogger().severe("**********************************************************************************");
+        		Thread.sleep(20000);
+        		return;
+        	}
+        } catch (Exception e) {
+        	getLogger().severe("Caught exception establishing external UUID Provider services : ");
+        	getLogger().severe(e.getMessage());
+        	e.printStackTrace();
+        }
         try {
             log(this, "%s starting...", versionInfo.getVersionString());
 
@@ -502,20 +523,6 @@ public class ZPermissionsPlugin extends JavaPlugin implements ZPermissionsCore, 
             return;
         }
 
-        //Verify that UUIDProvider is running
-        try {
-        	Plugin uuidplugin = this.getServer().getPluginManager().getPlugin("UUIDProvider");
-        	if(uuidplugin instanceof UUIDProvider){
-        		this.uuidprov = (UUIDProvider)uuidplugin;
-        		getLogger().info("Found UUIDProvider plugin! Using UUIDProvider for Resolving/Converting services!");
-        	} else {
-        		getLogger().warning("Could not find UUIDProvider - Will use default zPerms UUID Resolving/Converting services - NOT COMPATIBLE WITH 1.6.4!");
-        	}
-        } catch (Exception e) {
-        	getLogger().severe("Caught exception establishing external UUID Provider services : ");
-        	getLogger().severe(e.getMessage());
-        	e.printStackTrace();
-        }
         // Instantiate UUID resolver service
         if(uuidprov != null){
         	//Use UUIDProvider Resolver, instead of the mojang resolver.
