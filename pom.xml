@@ -21,8 +21,8 @@
 
 	<repositories>
 		<repository>
-			<id>MrWisskis-mvn-repo</id>
-			<url>https://github.com/MrWisski/maven-repo/raw/master/</url>
+    		<id>MyM-maven-repo</id>
+    		<url>https://github.com/MineYourMind/maven-repo/raw/master/</url>
 		</repository>
 		<repository>
 			<id>vault-repo</id>
