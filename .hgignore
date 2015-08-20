@@ -1,0 +1,13 @@
+syntax: glob
+.classpath
+.project
+.settings
+target
+ResolverTest*.sql
+ResolverTest*.db
+AvajeDaoTest*.sql
+AvajeDaoTest*.db
+NewAvajeDaoTest*.sql
+NewAvajeDaoTest*.db
+NewAvajeResolverTest*.sql
+NewAvajeResolverTest*.db

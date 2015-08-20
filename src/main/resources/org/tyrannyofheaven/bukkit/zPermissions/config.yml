@@ -1,0 +1,66 @@
+config-version: 18
+
+database-support: true
+
+database-read-only: false
+
+region-support: true
+
+group-permission: 'group.%s'
+
+assigned-group-permission: ''
+
+assigned-groups-can-include-default: true
+
+default-group: default
+
+default-track: default
+
+dump-directory: zPermissions-dumps
+
+default-temp-permission-timeout: 60
+
+tracks:
+  default:
+  - default
+  - somegroup
+  - someothergroup
+
+default-primary-group-track: ''
+
+kick-on-error: true
+
+kick-ops-on-error: false
+
+auto-refresh-interval: -1
+
+auto-refresh-force: false
+
+opaque-inheritance: true
+
+interleaved-player-permissions: true
+
+rank-admin-broadcast: false
+
+region-managers:
+- WorldGuard
+
+inherited-metadata: false
+
+native-vault-bridges: true
+
+vault-prefix-includes-group: true
+
+vault-metadata-includes-group: true
+
+vault-group-test-uses-assigned-only: false
+
+vault-get-groups-uses-assigned-only: false
+
+vault-player-prefix-format: ''
+
+vault-player-suffix-format: ''
+
+log-vault-changes: false
+
+debug: false
