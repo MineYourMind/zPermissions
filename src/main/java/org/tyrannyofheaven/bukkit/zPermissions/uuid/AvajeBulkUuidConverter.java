@@ -15,26 +15,21 @@
  */
 package org.tyrannyofheaven.bukkit.zPermissions.uuid;
 
-import static org.tyrannyofheaven.bukkit.util.ToHLoggingUtils.log;
-import static org.tyrannyofheaven.bukkit.util.ToHLoggingUtils.warn;
-import static org.tyrannyofheaven.bukkit.util.uuid.UuidUtils.SHORT_UUID_RE;
-import static org.tyrannyofheaven.bukkit.util.uuid.UuidUtils.canonicalizeUuid;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-
+import com.avaje.ebean.EbeanServer;
 import org.bukkit.plugin.Plugin;
 import org.tyrannyofheaven.bukkit.util.uuid.UuidDisplayName;
 import org.tyrannyofheaven.bukkit.util.uuid.UuidResolver;
 import org.tyrannyofheaven.bukkit.zPermissions.model.Membership;
 import org.tyrannyofheaven.bukkit.zPermissions.model.PermissionEntity;
 
-import com.avaje.ebean.EbeanServer;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.regex.Matcher;
+
+import static org.tyrannyofheaven.bukkit.util.ToHLoggingUtils.log;
+import static org.tyrannyofheaven.bukkit.util.ToHLoggingUtils.warn;
+import static org.tyrannyofheaven.bukkit.util.uuid.UuidUtils.SHORT_UUID_RE;
+import static org.tyrannyofheaven.bukkit.util.uuid.UuidUtils.canonicalizeUuid;
 
 public class AvajeBulkUuidConverter implements BulkUuidConverter {
 
@@ -96,6 +91,9 @@ public class AvajeBulkUuidConverter implements BulkUuidConverter {
             getEbeanServer().commitTransaction();
             
             log(plugin, "Migration done");
+        }
+        catch (Exception exc) {
+            log(plugin, Level.SEVERE, "AvajeBulkUuidConverter migration failed", exc);
         }
         finally {
             getEbeanServer().endTransaction();
